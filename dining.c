@@ -7,7 +7,7 @@
 #include "sem.h"
 #include <stdio.h>
 #include <unistd.h>
-#include <sched.h>
+#include <assert.h>
 
 static tsem_t *chopstick[5];
 static tsem_t *printing;
@@ -22,9 +22,16 @@ update_status (int i,
   status[i] = eating;
 
   tsem_wait (printing);
+  int sum = 0;
   for (idx = 0; idx < 5; idx++)
+  {
     fprintf (stdout, "%3s     ", status[idx] ? "EAT" : "...");
+	sum += status[idx];
+  }
   fprintf (stdout, "\n");
+
+  assert(sum > 0); // 항상 한명 이상이 식사중인지 체크
+
   tsem_signal (printing);
 }
 
@@ -54,7 +61,15 @@ thread_func (void *arg)
 
 	  update_status (i, 1);
 	  tsem_signal (chopstick[i]);
+
+	  // 포크 하나를 내려놓고 다른 철학자가 포크를 하나 집을때 까지 기다린다.
+	  while(tsem_try_wait(chopstick[i]) == 0)
+	  {
+		  tsem_signal (chopstick[i]);
+	  }
+
 	  tsem_signal (chopstick[(i + 1) % 5]);
+
 	  update_status (i, 0);
   }
   while (1);
